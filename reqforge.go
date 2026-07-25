@@ -5,13 +5,13 @@ import (
 	"net/url"
 )
 
-type Forge[t_meta any] struct {
-	host string
-
+type Forge[t_meta comparable] struct {
 	core[t_meta]
+
+	host string
 }
 
-func NewForge[t_meta any](host string, baseTrip http.RoundTripper) *Forge[t_meta] {
+func NewForge[t_meta comparable](host string, baseTrip http.RoundTripper) *Forge[t_meta] {
 	return &Forge[t_meta]{
 		host: host,
 		core: core[t_meta]{
@@ -55,5 +55,15 @@ func (f *Forge[t_meta]) AddHeader(header http.Header) *Forge[t_meta] {
 
 func (f *Forge[t_meta]) AddUrlValue(urlValues url.Values) *Forge[t_meta] {
 	f.addUrlValue(urlValues)
+	return f
+}
+
+func (f *Forge[t_meta]) SetEncoder(encoder encoder[any, t_meta]) *Forge[t_meta] {
+	f.setEncoder(encoder)
+	return f
+}
+
+func (f *Forge[t_meta]) SetDecoder(decoder decoder[any, t_meta]) *Forge[t_meta] {
+	f.setDecoder(decoder)
 	return f
 }

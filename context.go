@@ -2,7 +2,7 @@ package reqforge
 
 import "net/http"
 
-type Ctx[t_meta any] struct {
+type Ctx[t_meta comparable] struct {
 	tripper http.RoundTripper
 
 	Meta *t_meta
