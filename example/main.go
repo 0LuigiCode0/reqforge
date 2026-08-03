@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -116,6 +117,7 @@ func main() {
 		"/process-multipart": processMultipartEndpoint,
 		"/process-retry":     processRetryEndpoint,
 		"/process-mock":      processMockEndpoint,
+		"/echo":              echoEndpoint,
 	}
 
 	server := &http.Server{
@@ -159,13 +161,60 @@ func main() {
 	sendSingleRequest(ctx, "1 retry-запрос (middleware: AddTrip)", Hello(numRequests*3+1), "retry-payload", client.ProcessRetry)
 	sendSingleRequest(ctx, "1 mock-запрос (SetBaseTrip → mockTransport)", Hello(numRequests*3+2), "mock-payload", client.ProcessMock)
 
-	// --- 5. Ожидание ---
 	fmt.Println("[main] ожидаем завершения всех goroutine …")
 	wg.Wait()
 	fmt.Println("[main] все goroutine завершены!")
+
+	// --- 5. Демонстрация копирования и изоляции (Forge → Request) ---
+
+	resp1, err := client.Header(ctx)
+	if err != nil {
+		fmt.Printf("[main] ошибка DemoReq1: %v\n", err)
+	}
+	resp2, err := client.Query(ctx)
+	if err != nil {
+		fmt.Printf("[main] ошибка DemoReq2: %v\n", err)
+	}
+
 	fmt.Println()
+	fmt.Println("=== Проверка header/query ===")
+
+	if reflect.DeepEqual(resp1, &EchoResponse{
+		Headers: map[string]string{
+			"Accept-Encoding":   "gzip",
+			"User-Agent":        "Go-http-client/1.1",
+			"X-Req1":            "yes",
+			"X-Req2":            "hello",
+			"X-Template-Header": "shared",
+		},
+		Query: map[string]string{
+			"template_param": "from_template",
+		},
+	}) {
+		fmt.Println("header valid")
+	} else {
+		fmt.Println("header invalid")
+	}
+	if reflect.DeepEqual(resp2, &EchoResponse{
+		Headers: map[string]string{
+			"Accept-Encoding":   "gzip",
+			"User-Agent":        "Go-http-client/1.1",
+			"X-Template-Header": "shared",
+		},
+		Query: map[string]string{
+			"req2_param_1":   "unique",
+			"req2_param_2":   "world",
+			"template_param": "from_template",
+		},
+	}) {
+		fmt.Println("query valid")
+	} else {
+		fmt.Println("query invalid")
+	}
 
 	// --- 6. Проверка ---
+
+	fmt.Println()
 	fmt.Println("=== Проверка sync.Map ===")
 
 	count := 0

@@ -6,67 +6,62 @@ import (
 	"slices"
 )
 
-type core[t_meta comparable] struct {
+type core[tMeta any] struct {
 	header    http.Header
 	urlValues url.Values
 
 	baseTrip http.RoundTripper
-	trip     Trip[t_meta]
+	trip     Trip[tMeta]
 
-	encoder encoder[any, t_meta]
-	decoder decoder[any, t_meta]
+	encoder encoder[any, tMeta]
+	decoder decoder[any, tMeta]
 }
 
-type (
-	encoder[t_value, t_meta comparable] func(ctx *Ctx[t_meta], v t_value, req *http.Request) error
-	decoder[t_value, t_meta comparable] func(ctx *Ctx[t_meta], v t_value, resp *http.Response) error
-)
-
-func (c *core[t_meta]) setHeader(header http.Header) {
+func (c *core[tMeta]) setHeader(header http.Header) {
 	c.header = header
 }
 
-func (c *core[t_meta]) setContentType(contentType ContentType) {
+func (c *core[tMeta]) setContentType(contentType ContentType) {
 	c.header.Set(HeaderContentType, contentType)
 }
 
-func (c *core[t_meta]) setUserAgent(userAgent string) {
+func (c *core[tMeta]) setUserAgent(userAgent string) {
 	c.header.Set(HeaderUserAgent, userAgent)
 }
 
-func (c *core[t_meta]) setUrlValue(urlValues url.Values) {
+func (c *core[tMeta]) setUrlValue(urlValues url.Values) {
 	c.urlValues = urlValues
 }
 
-func (c *core[t_meta]) addTrip(chainTrips []ChainTrip[t_meta]) {
+func (c *core[tMeta]) addTrip(chainTrips []ChainTrip[tMeta]) {
 	for _, chainTrip := range chainTrips {
 		c.trip = chainTrip(c.trip)
 	}
 }
 
-func (c *core[t_meta]) addHeader(header http.Header) {
+func (c *core[tMeta]) addHeader(header http.Header) {
 	for k, v := range header {
 		c.header[k] = append(c.header[k], v...)
 	}
 }
 
-func (c *core[t_meta]) addUrlValue(urlValues url.Values) {
+func (c *core[tMeta]) addUrlValue(urlValues url.Values) {
 	for k, v := range urlValues {
 		c.urlValues[k] = append(c.urlValues[k], v...)
 	}
 }
 
-func (c *core[t_meta]) setEncoder(encoder encoder[any, t_meta]) {
+func (c *core[tMeta]) setEncoder(encoder encoder[any, tMeta]) {
 	c.encoder = encoder
 }
 
-func (c *core[t_meta]) setDecoder(decoder decoder[any, t_meta]) {
+func (c *core[tMeta]) setDecoder(decoder decoder[any, tMeta]) {
 	c.decoder = decoder
 }
 
 // -------------------------------------------------------------------------- //
 
-func (c *core[t_meta]) clone() core[t_meta] {
+func (c *core[tMeta]) clone() core[tMeta] {
 	header := make(http.Header, len(c.header))
 	for k, v := range c.header {
 		header[k] = slices.Clone(v)
@@ -77,7 +72,7 @@ func (c *core[t_meta]) clone() core[t_meta] {
 		urlValues[k] = slices.Clone(v)
 	}
 
-	return core[t_meta]{
+	return core[tMeta]{
 		header:    header,
 		urlValues: urlValues,
 		baseTrip:  c.baseTrip,

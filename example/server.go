@@ -93,7 +93,7 @@ func (sw *statusWriter) WriteHeader(code int) {
 func processEndpoint(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	var body RequestBody
+	var body map[string]*RequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "bad request"})
@@ -101,8 +101,8 @@ func processEndpoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	processed.Store(body.ID, body)
-	fmt.Printf("[server] обработан id=%v payload=%q\n", body.ID, body.Payload)
+	processed.Store(body["hello"].ID, body)
+	fmt.Printf("[server] обработан id=%v payload=%q\n", body["hello"].ID, body["hello"].Payload)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(ResponseBody{Status: "processed"})
@@ -198,11 +198,45 @@ func processRetryEndpoint(w http.ResponseWriter, r *http.Request) {
 }
 
 // -------------------------------------------------------------------------- //
-//  processMockEndpoint — эндпоинт для демонстрации mock (всегда 200)
+// processMockEndpoint — эндпоинт для демонстрации mock (всегда 200)
 // -------------------------------------------------------------------------- //
 
 func processMockEndpoint(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(ResponseBody{Status: "mock-processed"})
+}
+
+// -------------------------------------------------------------------------- //
+//  echoEndpoint — возвращает заголовки и query-параметры клиента в JSON
+// -------------------------------------------------------------------------- //
+
+func echoEndpoint(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Собираем заголовки
+	headers := make(map[string]string)
+	for k, v := range r.Header {
+		if len(v) > 0 {
+			headers[k] = v[0]
+		}
+	}
+	// Убираем технические заголовки
+	delete(headers, "Content-Length")
+
+	// Собираем query-параметры
+	query := make(map[string]string)
+	for k, v := range r.URL.Query() {
+		if len(v) > 0 {
+			query[k] = v[0]
+		}
+	}
+
+	response := map[string]any{
+		"headers": headers,
+		"query":   query,
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 }

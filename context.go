@@ -2,12 +2,12 @@ package reqforge
 
 import "net/http"
 
-type Ctx[t_meta comparable] struct {
+type Ctx[tMeta any] struct {
 	tripper http.RoundTripper
 
-	Meta *t_meta
+	Meta *tMeta
 }
 
-func (ctx *Ctx[t_meta]) SetBaseTrip(tripper http.RoundTripper) {
+func (ctx *Ctx[tMeta]) SetBaseTrip(tripper http.RoundTripper) {
 	ctx.tripper = tripper
 }

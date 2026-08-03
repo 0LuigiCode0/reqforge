@@ -5,65 +5,65 @@ import (
 	"net/url"
 )
 
-type Forge[t_meta comparable] struct {
-	core[t_meta]
+type Forge[tMeta any] struct {
+	core[tMeta]
 
 	host string
 }
 
-func NewForge[t_meta comparable](host string, baseTrip http.RoundTripper) *Forge[t_meta] {
-	return &Forge[t_meta]{
+func NewForge[tMeta any](host string, baseTrip http.RoundTripper) *Forge[tMeta] {
+	return &Forge[tMeta]{
 		host: host,
-		core: core[t_meta]{
+		core: core[tMeta]{
 			baseTrip:  baseTrip,
-			trip:      wrapBaseTrip[t_meta],
+			trip:      wrapBaseTrip[tMeta],
 			header:    http.Header{},
 			urlValues: url.Values{},
 		},
 	}
 }
 
-func (f *Forge[t_meta]) SetHeader(header http.Header) *Forge[t_meta] {
+func (f *Forge[tMeta]) SetHeader(header http.Header) *Forge[tMeta] {
 	f.setHeader(header)
 	return f
 }
 
-func (f *Forge[t_meta]) SetContentType(contentType ContentType) *Forge[t_meta] {
+func (f *Forge[tMeta]) SetContentType(contentType ContentType) *Forge[tMeta] {
 	f.setContentType(contentType)
 	return f
 }
 
-func (f *Forge[t_meta]) SetUserAgent(userAgent string) *Forge[t_meta] {
+func (f *Forge[tMeta]) SetUserAgent(userAgent string) *Forge[tMeta] {
 	f.setUserAgent(userAgent)
 	return f
 }
 
-func (f *Forge[t_meta]) SetUrlValue(urlValues url.Values) *Forge[t_meta] {
+func (f *Forge[tMeta]) SetUrlValue(urlValues url.Values) *Forge[tMeta] {
 	f.setUrlValue(urlValues)
 	return f
 }
 
-func (f *Forge[t_meta]) AddTrip(chainTrips ...ChainTrip[t_meta]) *Forge[t_meta] {
+func (f *Forge[tMeta]) AddTrip(chainTrips ...ChainTrip[tMeta]) *Forge[tMeta] {
 	f.addTrip(chainTrips)
 	return f
 }
 
-func (f *Forge[t_meta]) AddHeader(header http.Header) *Forge[t_meta] {
+func (f *Forge[tMeta]) AddHeader(header http.Header) *Forge[tMeta] {
 	f.addHeader(header)
 	return f
 }
 
-func (f *Forge[t_meta]) AddUrlValue(urlValues url.Values) *Forge[t_meta] {
+func (f *Forge[tMeta]) AddUrlValue(urlValues url.Values) *Forge[tMeta] {
 	f.addUrlValue(urlValues)
 	return f
 }
 
-func (f *Forge[t_meta]) SetEncoder(encoder encoder[any, t_meta]) *Forge[t_meta] {
+func (f *Forge[tMeta]) SetEncoder(encoder encoder[any, tMeta]) *Forge[tMeta] {
 	f.setEncoder(encoder)
 	return f
 }
 
-func (f *Forge[t_meta]) SetDecoder(decoder decoder[any, t_meta]) *Forge[t_meta] {
+func (f *Forge[tMeta]) SetDecoder(decoder decoder[any, tMeta]) *Forge[tMeta] {
 	f.setDecoder(decoder)
 	return f
 }
