@@ -6,6 +6,7 @@ import (
 	"slices"
 )
 
+// core — общее состояние конфигурации: заголовки, параметры URL, middleware-цепочка, кодировщик/декодер.
 type core[tMeta any] struct {
 	header    http.Header
 	urlValues url.Values
@@ -34,6 +35,8 @@ func (c *core[tMeta]) setUrlValue(urlValues url.Values) {
 }
 
 func (c *core[tMeta]) addTrip(chainTrips []ChainTrip[tMeta]) {
+	// каждый ChainTrip оборачивает текущий trip, создавая вложенную цепочку:
+	// первый переданный middleware — внешний, последний — ближайший к baseTrip
 	for _, chainTrip := range chainTrips {
 		c.trip = chainTrip(c.trip)
 	}
@@ -61,15 +64,18 @@ func (c *core[tMeta]) setDecoder(decoder decoder[any, tMeta]) {
 
 // -------------------------------------------------------------------------- //
 
+// clone — создать глубокую копию core для изоляции каждого Request.
+// Копирует header и urlValues (слайсы значений), но не копирует baseTrip, trip, encoder, decoder —
+// это функции и интерфейсы, которые не мутируются и безопасны для общего использования.
 func (c *core[tMeta]) clone() core[tMeta] {
 	header := make(http.Header, len(c.header))
 	for k, v := range c.header {
-		header[k] = slices.Clone(v)
+		header[k] = slices.Clone(v) // глубокое копирование слайса значений заголовка
 	}
 
 	urlValues := make(url.Values, len(c.urlValues))
 	for k, v := range c.urlValues {
-		urlValues[k] = slices.Clone(v)
+		urlValues[k] = slices.Clone(v) // глубокое копирование слайса значений параметров
 	}
 
 	return core[tMeta]{
