@@ -3,19 +3,17 @@ package reqforge
 import (
 	"net/http"
 	"net/url"
-	"slices"
+	stdslices "slices"
 )
 
-// core — общее состояние конфигурации: заголовки, параметры URL, middleware-цепочка, кодировщик/декодер.
+// core — состояние конфигурации: заголовки, параметры URL, middleware-цепочка.
 type core[tMeta any] struct {
 	header    http.Header
 	urlValues url.Values
 
-	baseTrip http.RoundTripper
-	trip     Trip[tMeta]
-
-	encoder encoder[any, tMeta]
-	decoder decoder[any, tMeta]
+	// baseTrip — fallback-RoundTripper (подставляется в meta.BaseTrip, если тот не задан).
+	baseTrip Trip
+	trip     Trip
 }
 
 func (c *core[tMeta]) setHeader(header http.Header) {
@@ -34,10 +32,9 @@ func (c *core[tMeta]) setUrlValue(urlValues url.Values) {
 	c.urlValues = urlValues
 }
 
-func (c *core[tMeta]) addTrip(chainTrips []ChainTrip[tMeta]) {
-	// каждый ChainTrip оборачивает текущий trip, создавая вложенную цепочку:
-	// первый переданный middleware — внешний, последний — ближайший к baseTrip
-	for _, chainTrip := range chainTrips {
+func (c *core[tMeta]) addTrip(chainTrips []ChainTrip) {
+	// порядок: первый ChainTrip — внешний, последний — ближайший к baseTrip
+	for _, chainTrip := range stdslices.Backward(chainTrips) {
 		c.trip = chainTrip(c.trip)
 	}
 }
@@ -54,28 +51,16 @@ func (c *core[tMeta]) addUrlValue(urlValues url.Values) {
 	}
 }
 
-func (c *core[tMeta]) setEncoder(encoder encoder[any, tMeta]) {
-	c.encoder = encoder
-}
-
-func (c *core[tMeta]) setDecoder(decoder decoder[any, tMeta]) {
-	c.decoder = decoder
-}
-
-// -------------------------------------------------------------------------- //
-
-// clone — создать глубокую копию core для изоляции каждого Request.
-// Копирует header и urlValues (слайсы значений), но не копирует baseTrip, trip, encoder, decoder —
-// это функции и интерфейсы, которые не мутируются и безопасны для общего использования.
+// clone — глубокая копия для изоляции Request; trip/baseTrip — иммутабельные, копируются по ссылке.
 func (c *core[tMeta]) clone() core[tMeta] {
 	header := make(http.Header, len(c.header))
 	for k, v := range c.header {
-		header[k] = slices.Clone(v) // глубокое копирование слайса значений заголовка
+		header[k] = stdslices.Clone(v)
 	}
 
 	urlValues := make(url.Values, len(c.urlValues))
 	for k, v := range c.urlValues {
-		urlValues[k] = slices.Clone(v) // глубокое копирование слайса значений параметров
+		urlValues[k] = stdslices.Clone(v)
 	}
 
 	return core[tMeta]{
@@ -83,7 +68,5 @@ func (c *core[tMeta]) clone() core[tMeta] {
 		urlValues: urlValues,
 		baseTrip:  c.baseTrip,
 		trip:      c.trip,
-		encoder:   c.encoder,
-		decoder:   c.decoder,
 	}
 }

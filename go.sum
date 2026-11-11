@@ -1,0 +1,6 @@
+github.com/0LuigiCode0/errors v0.9.1 h1:Fp1DhrVI32vDQcX009o2U/j5D3m4NZHIYdaqSU9OeVM=
+github.com/0LuigiCode0/errors v0.9.1/go.mod h1:LJmffBPC6MYM/1i1jbLfa5vogeoGxZgU8hkNFEijknc=
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
+github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=

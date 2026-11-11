@@ -1,32 +1,39 @@
 package reqforge
 
 import (
-	"context"
+	stdcontext "context"
 	"net/http"
 	"net/url"
-	"slices"
+	stdpath "path"
+	stdslices "slices"
+
+	"github.com/0LuigiCode0/errors"
 )
 
-// Request — экземпляр HTTP-запроса для конкретного endpoint (method + path).
-// Создаётся из Forge и содержит изолированную копию его конфигурации.
-// Generic parameters: tIn — тип тела запроса, tOut — тип тела ответа, tMeta — произвольные метаданные middleware.
-type Request[tIn any, tOut, tMeta any] struct {
+// Request — запрос к конкретному endpoint (method + path); изолированная копия конфигурации Forge.
+type Request[tIn, tOut, tMeta any] struct {
 	core[tMeta]
 
 	url    string
 	method Method
 
-	encoder encoder[tIn, tMeta]
-	decoder decoder[*tOut, tMeta]
+	// inTransform — сериализация тела запроса (опционально).
+	inTransform inTransform[tIn]
+	// outTransform — десериализация тела ответа (опционально).
+	outTransform outTransform[*tOut]
 }
 
-// NewRequest создаёт новый Request на основе Forge для заданного HTTP-метода и пути.
-// Возвращённый Request содержит глубокую копию конфигурации Forge.
-func NewRequest[tIn any, tOut, tMeta any](f *Forge[tMeta], method Method, path string) *Request[tIn, tOut, tMeta] {
+// NewRequest — Request на основе Forge для заданного HTTP-метода и пути.
+func NewRequest[tIn, tOut, tMeta any](f *Forge[tMeta], method Method, path string) *Request[tIn, tOut, tMeta] {
+	uri := stdpath.Join(f.host, path)
+	if f.schema == "" {
+		uri = f.host + path
+	}
+
 	return &Request[tIn, tOut, tMeta]{
-		url:    f.host + path,
+		url:    f.schema + uri,
 		method: method,
-		core:   f.core.clone(),
+		core:   f.clone(),
 	}
 }
 
@@ -55,7 +62,7 @@ func (r *Request[tIn, tOut, tMeta]) SetUrlValue(urlValues url.Values) *Request[t
 }
 
 // AddTrip — добавить middleware в цепочку выполнения этого запроса.
-func (r *Request[tIn, tOut, tMeta]) AddTrip(chainTrips ...ChainTrip[tMeta]) *Request[tIn, tOut, tMeta] {
+func (r *Request[tIn, tOut, tMeta]) AddTrip(chainTrips ...ChainTrip) *Request[tIn, tOut, tMeta] {
 	r.addTrip(chainTrips)
 	return r
 }
@@ -72,74 +79,66 @@ func (r *Request[tIn, tOut, tMeta]) AddUrlValue(urlValues url.Values) *Request[t
 	return r
 }
 
-// SetEncoder — задать кодировщик для тела этого запроса (переопределяет Forge).
-func (r *Request[tIn, tOut, tMeta]) SetEncoder(encoder encoder[tIn, tMeta]) *Request[tIn, tOut, tMeta] {
-	r.encoder = encoder
+// SetInTransform — трансформатор входа (сериализация тела запроса) для этого запроса.
+func (r *Request[tIn, tOut, tMeta]) SetInTransform(t inTransform[tIn]) *Request[tIn, tOut, tMeta] {
+	r.inTransform = t
 	return r
 }
 
-// SetDecoder — задать декодер для тела этого запроса (переопределяет Forge).
-func (r *Request[tIn, tOut, tMeta]) SetDecoder(decoder decoder[*tOut, tMeta]) *Request[tIn, tOut, tMeta] {
-	r.decoder = decoder
+// SetOutTransform — трансформатор выхода (десериализация тела ответа) для этого запроса.
+func (r *Request[tIn, tOut, tMeta]) SetOutTransform(t outTransform[*tOut]) *Request[tIn, tOut, tMeta] {
+	r.outTransform = t
 	return r
 }
 
-// Do — выполнить HTTP-запрос.
-// Параметры: ctx — контекст, in — тело запроса, meta — метаданные для middleware.
-// Возвращает: распарсенное тело ответа и ошибку (если возникла).
-func (r *Request[tIn, tOut, tMeta]) Do(ctx context.Context, in tIn, meta *tMeta) (*tOut, error) {
-	// Создаём tripper — адаптер http.RoundTripper, который выполняет цепочку Trip.
-	// Ctx содержит метаданные и ссылку на базовый RoundTripper (можно подменить через SetBaseTrip).
-	tripper := &tripper[tMeta]{
-		ctx: &Ctx[tMeta]{
-			Meta:    meta,
-			tripper: r.baseTrip,
-		},
-		trip: r.trip,
+// Do — выполняет HTTP-запрос через middleware-цепочку, с inTransform и outTransform.
+func (r *Request[tIn, tOut, tMeta]) Do(ctx stdcontext.Context, in tIn, meta *Meta[tMeta]) (*tOut, error) {
+	if meta.BaseTrip == nil {
+		meta.BaseTrip = r.baseTrip
 	}
+	ctx = meta.WithCtx(ctx)
 
-	reqCtx, err := http.NewRequestWithContext(ctx, r.method, r.url, nil)
+	req, err := http.NewRequestWithContext(ctx, r.method, r.url, http.NoBody)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
-	// Копируем заголовки из конфигурации — чтобы не мутировать исходную core.
-	reqCtx.Header = make(http.Header, len(r.header))
+	// копия, чтобы не мутировать core запроса
+	req.Header = make(http.Header, len(r.header))
 	for k, v := range r.header {
-		reqCtx.Header[k] = slices.Clone(v)
+		req.Header[k] = stdslices.Clone(v)
 	}
 	urlValues := make(url.Values, len(r.urlValues))
 	for k, v := range r.urlValues {
-		urlValues[k] = slices.Clone(v)
+		urlValues[k] = stdslices.Clone(v)
 	}
-	reqCtx.URL.RawQuery = urlValues.Encode()
+	req.URL.RawQuery = urlValues.Encode()
 
-	// Применяем кодировщик: сначала пробуем Request-специфичный, затем Forge-по умолчанию.
-	if r.encoder != nil {
-		err = r.encoder(tripper.ctx, in, reqCtx)
-	} else if r.core.encoder != nil {
-		err = r.core.encoder(tripper.ctx, in, reqCtx)
-	}
-	if err != nil {
-		return nil, err
+	// трансформатор входа (если задан)
+	if r.inTransform != nil {
+		if err = r.inTransform(in, req); err != nil {
+			return nil, errors.WithStack(err)
+		}
 	}
 
+	tripper := &tripper[tMeta]{
+		meta: meta,
+		trip: r.trip,
+	}
 	c := http.Client{Transport: tripper}
-	resp, err := c.Do(reqCtx)
+	resp, err := c.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	defer resp.Body.Close()
 
-	// Десериализуем тело ответа: сначала Request-специфичный decoder, затем Forge-по умолчанию.
-	out := new(tOut)
-	if r.decoder != nil {
-		err = r.decoder(tripper.ctx, out, resp)
-	} else if r.core.decoder != nil {
-		err = r.core.decoder(tripper.ctx, out, resp)
-	}
-	if err != nil {
-		return nil, err
+	// трансформатор выхода (если задан)
+	var out *tOut
+	if resp.Body != nil && r.outTransform != nil {
+		out = new(tOut)
+		if err = r.outTransform(out, resp); err != nil {
+			return nil, errors.WithStack(err)
+		}
 	}
 
 	return out, nil

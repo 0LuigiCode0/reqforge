@@ -1,3 +1,11 @@
+// Package reqforge — generic-билдер HTTP-запросов с middleware-цепочкой.
+//
+// Forge — переиспользуемый шаблон; каждый Request получает изолированную копию состояния.
+//
+//	forge := reqforge.NewForge[*reqforge.BaseMeta](host, baseTrip)
+//	forge.SetContentType(reqforge.ContentTypeJson)
+//	req := reqforge.NewRequest[RequestBody, ResponseBody, *reqforge.BaseMeta](forge, "POST", "/api/users")
+//	resp, err := req.Do(ctx, requestBody, meta)
 package reqforge
 
 import (
@@ -5,27 +13,30 @@ import (
 	"net/url"
 )
 
-// Forge — shared HTTP client template with common configuration (headers, query params, middleware chain).
-// A Forge can be reused to create multiple Requests, each cloning its state for isolation.
+// Forge — шаблон HTTP-клиента (host + общая конфигурация); tMeta — тип метаданных для middleware.
 type Forge[tMeta any] struct {
 	core[tMeta]
 
-	host string
+	// host — базовый URL (хост) для всех запросов из этого Forge.
+	host   string
+	schema Schema
 }
 
-// NewForge creates a new Forge with the given base URL (host) and default http.RoundTripper.
-// All Requests created from this Forge will inherit its configuration unless overridden.
-func NewForge[tMeta any](host string, baseTrip http.RoundTripper) *Forge[tMeta] {
+// NewForge — Forge с базовым URL (host) и базовым RoundTripper, вызываемым в конце цепочки middleware.
+func NewForge[tMeta any](schema Schema, host string, baseTrip Trip) *Forge[tMeta] {
 	return &Forge[tMeta]{
-		host: host,
+		schema: schema,
+		host:   host,
 		core: core[tMeta]{
-			baseTrip:  baseTrip, // сохраняется для доступа из Ctx.SetBaseTrip (например, подмена на mock)
-			trip:      wrapBaseTrip[tMeta], // начальный элемент цепочки middleware — вызывает baseTrip
+			baseTrip:  baseTrip,
+			trip:      wrapBaseTrip[tMeta],
 			header:    http.Header{},
 			urlValues: url.Values{},
 		},
 	}
 }
+
+func (f *Forge[tMeta]) GetHost() string { return f.host }
 
 // SetHeader — задать HTTP-заголовки (переопределяет существующие).
 func (f *Forge[tMeta]) SetHeader(header http.Header) *Forge[tMeta] {
@@ -52,8 +63,7 @@ func (f *Forge[tMeta]) SetUrlValue(urlValues url.Values) *Forge[tMeta] {
 }
 
 // AddTrip — добавить middleware в цепочку выполнения запросов.
-// Middleware добавляются в порядке вызова, каждый обёртывает предыдущий.
-func (f *Forge[tMeta]) AddTrip(chainTrips ...ChainTrip[tMeta]) *Forge[tMeta] {
+func (f *Forge[tMeta]) AddTrip(chainTrips ...ChainTrip) *Forge[tMeta] {
 	f.addTrip(chainTrips)
 	return f
 }
@@ -67,17 +77,5 @@ func (f *Forge[tMeta]) AddHeader(header http.Header) *Forge[tMeta] {
 // AddUrlValue — добавить параметры URL-строки к уже существующим.
 func (f *Forge[tMeta]) AddUrlValue(urlValues url.Values) *Forge[tMeta] {
 	f.addUrlValue(urlValues)
-	return f
-}
-
-// SetEncoder — задать кодировщик (serializer) для тела запроса.
-func (f *Forge[tMeta]) SetEncoder(encoder encoder[any, tMeta]) *Forge[tMeta] {
-	f.setEncoder(encoder)
-	return f
-}
-
-// SetDecoder — задать декодер (deserializer) для тела ответа.
-func (f *Forge[tMeta]) SetDecoder(decoder decoder[any, tMeta]) *Forge[tMeta] {
-	f.setDecoder(decoder)
 	return f
 }
